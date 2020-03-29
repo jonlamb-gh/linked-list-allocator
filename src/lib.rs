@@ -9,12 +9,10 @@ extern crate std;
 #[cfg(feature = "use_spin")]
 extern crate spinning_top;
 
-extern crate alloc;
-
-use alloc::alloc::Layout;
+//use core::alloc::GlobalAlloc;
+use core::alloc::Layout;
 #[cfg(feature = "alloc_ref")]
-use alloc::alloc::{AllocErr, AllocRef};
-use core::alloc::GlobalAlloc;
+use core::alloc::{AllocErr, AllocRef};
 use core::mem;
 #[cfg(feature = "use_spin")]
 use core::ops::Deref;
@@ -56,9 +54,10 @@ impl Heap {
         self.holes = HoleList::new(heap_bottom, heap_size);
     }
 
-    /// Creates a new heap with the given `bottom` and `size`. The bottom address must be valid
-    /// and the memory in the `[heap_bottom, heap_bottom + heap_size)` range must not be used for
-    /// anything else. This function is unsafe because it can cause undefined behavior if the
+    /// Creates a new heap with the given `bottom` and `size`. The bottom
+    /// address must be valid and the memory in the `[heap_bottom,
+    /// heap_bottom + heap_size)` range must not be used for anything else.
+    /// This function is unsafe because it can cause undefined behavior if the
     /// given address is invalid.
     pub unsafe fn new(heap_bottom: usize, heap_size: usize) -> Heap {
         Heap {
@@ -68,11 +67,12 @@ impl Heap {
         }
     }
 
-    /// Allocates a chunk of the given size with the given alignment. Returns a pointer to the
-    /// beginning of that chunk if it was successful. Else it returns `None`.
-    /// This function scans the list of free memory blocks and uses the first block that is big
-    /// enough. The runtime is in O(n) where n is the number of free blocks, but it should be
-    /// reasonably fast for small allocations.
+    /// Allocates a chunk of the given size with the given alignment. Returns a
+    /// pointer to the beginning of that chunk if it was successful. Else it
+    /// returns `None`. This function scans the list of free memory blocks
+    /// and uses the first block that is big enough. The runtime is in O(n)
+    /// where n is the number of free blocks, but it should be reasonably
+    /// fast for small allocations.
     pub fn allocate_first_fit(&mut self, layout: Layout) -> Result<NonNull<u8>, ()> {
         let mut size = layout.size();
         if size < HoleList::min_size() {
@@ -85,12 +85,14 @@ impl Heap {
     }
 
     /// Frees the given allocation. `ptr` must be a pointer returned
-    /// by a call to the `allocate_first_fit` function with identical size and alignment. Undefined
-    /// behavior may occur for invalid arguments, thus this function is unsafe.
+    /// by a call to the `allocate_first_fit` function with identical size and
+    /// alignment. Undefined behavior may occur for invalid arguments, thus
+    /// this function is unsafe.
     ///
-    /// This function walks the list of free memory blocks and inserts the freed block at the
-    /// correct place. If the freed block is adjacent to another free block, the blocks are merged
-    /// again. This operation is in `O(n)` since the list needs to be sorted by address.
+    /// This function walks the list of free memory blocks and inserts the freed
+    /// block at the correct place. If the freed block is adjacent to
+    /// another free block, the blocks are merged again. This operation is
+    /// in `O(n)` since the list needs to be sorted by address.
     pub unsafe fn deallocate(&mut self, ptr: NonNull<u8>, layout: Layout) {
         let mut size = layout.size();
         if size < HoleList::min_size() {
@@ -160,9 +162,10 @@ impl LockedHeap {
         LockedHeap(Spinlock::new(Heap::empty()))
     }
 
-    /// Creates a new heap with the given `bottom` and `size`. The bottom address must be valid
-    /// and the memory in the `[heap_bottom, heap_bottom + heap_size)` range must not be used for
-    /// anything else. This function is unsafe because it can cause undefined behavior if the
+    /// Creates a new heap with the given `bottom` and `size`. The bottom
+    /// address must be valid and the memory in the `[heap_bottom,
+    /// heap_bottom + heap_size)` range must not be used for anything else.
+    /// This function is unsafe because it can cause undefined behavior if the
     /// given address is invalid.
     pub unsafe fn new(heap_bottom: usize, heap_size: usize) -> LockedHeap {
         LockedHeap(Spinlock::new(Heap {

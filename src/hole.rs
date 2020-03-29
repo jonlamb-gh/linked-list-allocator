@@ -1,4 +1,4 @@
-use alloc::alloc::Layout;
+use core::alloc::Layout;
 use core::mem::{align_of, size_of};
 use core::ptr::NonNull;
 
@@ -20,9 +20,10 @@ impl HoleList {
         }
     }
 
-    /// Creates a `HoleList` that contains the given hole. This function is unsafe because it
-    /// creates a hole at the given `hole_addr`. This can cause undefined behavior if this address
-    /// is invalid or if memory from the `[hole_addr, hole_addr+size) range is used somewhere else.
+    /// Creates a `HoleList` that contains the given hole. This function is
+    /// unsafe because it creates a hole at the given `hole_addr`. This can
+    /// cause undefined behavior if this address is invalid or if memory
+    /// from the `[hole_addr, hole_addr+size) range is used somewhere else.
     ///
     /// The pointer to `hole_addr` is automatically aligned.
     pub unsafe fn new(hole_addr: usize, hole_size: usize) -> HoleList {
@@ -43,12 +44,14 @@ impl HoleList {
         }
     }
 
-    /// Searches the list for a big enough hole. A hole is big enough if it can hold an allocation
-    /// of `layout.size()` bytes with the given `layout.align()`. If such a hole is found in the
-    /// list, a block of the required size is allocated from it. Then the start address of that
+    /// Searches the list for a big enough hole. A hole is big enough if it can
+    /// hold an allocation of `layout.size()` bytes with the given
+    /// `layout.align()`. If such a hole is found in the list, a block of
+    /// the required size is allocated from it. Then the start address of that
     /// block is returned.
-    /// This function uses the “first fit” strategy, so it uses the first hole that is big
-    /// enough. Thus the runtime is in O(n) but it should be reasonably fast for small allocations.
+    /// This function uses the “first fit” strategy, so it uses the first hole
+    /// that is big enough. Thus the runtime is in O(n) but it should be
+    /// reasonably fast for small allocations.
     pub fn allocate_first_fit(&mut self, layout: Layout) -> Result<NonNull<u8>, ()> {
         assert!(layout.size() >= Self::min_size());
 
@@ -63,17 +66,20 @@ impl HoleList {
         })
     }
 
-    /// Frees the allocation given by `ptr` and `layout`. `ptr` must be a pointer returned by a call
-    /// to the `allocate_first_fit` function with identical layout. Undefined behavior may occur for
+    /// Frees the allocation given by `ptr` and `layout`. `ptr` must be a
+    /// pointer returned by a call to the `allocate_first_fit` function with
+    /// identical layout. Undefined behavior may occur for
     /// invalid arguments.
-    /// This function walks the list and inserts the given block at the correct place. If the freed
-    /// block is adjacent to another free block, the blocks are merged again.
-    /// This operation is in `O(n)` since the list needs to be sorted by address.
+    /// This function walks the list and inserts the given block at the correct
+    /// place. If the freed block is adjacent to another free block, the
+    /// blocks are merged again. This operation is in `O(n)` since the list
+    /// needs to be sorted by address.
     pub unsafe fn deallocate(&mut self, ptr: NonNull<u8>, layout: Layout) {
         deallocate(&mut self.first, ptr.as_ptr() as usize, layout.size())
     }
 
-    /// Returns the minimal allocation size. Smaller allocations or deallocations are not allowed.
+    /// Returns the minimal allocation size. Smaller allocations or
+    /// deallocations are not allowed.
     pub fn min_size() -> usize {
         size_of::<usize>() * 2
     }
@@ -88,7 +94,8 @@ impl HoleList {
     }
 }
 
-/// A block containing free memory. It points to the next hole and thus forms a linked list.
+/// A block containing free memory. It points to the next hole and thus forms a
+/// linked list.
 #[cfg(not(test))]
 pub struct Hole {
     size: usize,
@@ -118,19 +125,22 @@ struct HoleInfo {
     size: usize,
 }
 
-/// The result returned by `split_hole` and `allocate_first_fit`. Contains the address and size of
-/// the allocation (in the `info` field), and the front and back padding.
+/// The result returned by `split_hole` and `allocate_first_fit`. Contains the
+/// address and size of the allocation (in the `info` field), and the front and
+/// back padding.
 struct Allocation {
     info: HoleInfo,
     front_padding: Option<HoleInfo>,
     back_padding: Option<HoleInfo>,
 }
 
-/// Splits the given hole into `(front_padding, hole, back_padding)` if it's big enough to allocate
-/// `required_layout.size()` bytes with the `required_layout.align()`. Else `None` is returned.
-/// Front padding occurs if the required alignment is higher than the hole's alignment. Back
-/// padding occurs if the required size is smaller than the size of the aligned hole. All padding
-/// must be at least `HoleList::min_size()` big or the hole is unusable.
+/// Splits the given hole into `(front_padding, hole, back_padding)` if it's big
+/// enough to allocate `required_layout.size()` bytes with the
+/// `required_layout.align()`. Else `None` is returned. Front padding occurs if
+/// the required alignment is higher than the hole's alignment. Back
+/// padding occurs if the required size is smaller than the size of the aligned
+/// hole. All padding must be at least `HoleList::min_size()` big or the hole is
+/// unusable.
 fn split_hole(hole: HoleInfo, required_layout: Layout) -> Option<Allocation> {
     let required_size = required_layout.size();
     let required_align = required_layout.align();
@@ -168,7 +178,8 @@ fn split_hole(hole: HoleInfo, required_layout: Layout) -> Option<Allocation> {
         // we can't use this hole since its remains would form a new, too small hole
         return None;
     } else {
-        // the hole is bigger than necessary, so there is some padding behind the allocation
+        // the hole is bigger than necessary, so there is some padding behind the
+        // allocation
         Some(HoleInfo {
             addr: aligned_hole.addr + required_size,
             size: aligned_hole.size - required_size,
@@ -185,13 +196,14 @@ fn split_hole(hole: HoleInfo, required_layout: Layout) -> Option<Allocation> {
     })
 }
 
-/// Searches the list starting at the next hole of `previous` for a big enough hole. A hole is big
-/// enough if it can hold an allocation of `layout.size()` bytes with the given `layou.align()`.
-/// When a hole is used for an allocation, there may be some needed padding before and/or after
-/// the allocation. This padding is returned as part of the `Allocation`. The caller must take
+/// Searches the list starting at the next hole of `previous` for a big enough
+/// hole. A hole is big enough if it can hold an allocation of `layout.size()`
+/// bytes with the given `layou.align()`. When a hole is used for an allocation,
+/// there may be some needed padding before and/or after the allocation. This
+/// padding is returned as part of the `Allocation`. The caller must take
 /// care of freeing it again.
-/// This function uses the “first fit” strategy, so it breaks as soon as a big enough hole is
-/// found (and returns it).
+/// This function uses the “first fit” strategy, so it breaks as soon as a big
+/// enough hole is found (and returns it).
 fn allocate_first_fit(mut previous: &mut Hole, layout: Layout) -> Result<Allocation, ()> {
     loop {
         let allocation: Option<Allocation> = previous
@@ -200,7 +212,8 @@ fn allocate_first_fit(mut previous: &mut Hole, layout: Layout) -> Result<Allocat
             .and_then(|current| split_hole(current.info(), layout.clone()));
         match allocation {
             Some(allocation) => {
-                // hole is big enough, so remove it from the list by updating the previous pointer
+                // hole is big enough, so remove it from the list by updating the previous
+                // pointer
                 previous.next = previous.next.as_mut().unwrap().next.take();
                 return Ok(allocation);
             }
@@ -216,24 +229,25 @@ fn allocate_first_fit(mut previous: &mut Hole, layout: Layout) -> Result<Allocat
     }
 }
 
-/// Frees the allocation given by `(addr, size)`. It starts at the given hole and walks the list to
-/// find the correct place (the list is sorted by address).
+/// Frees the allocation given by `(addr, size)`. It starts at the given hole
+/// and walks the list to find the correct place (the list is sorted by
+/// address).
 fn deallocate(mut hole: &mut Hole, addr: usize, mut size: usize) {
     loop {
         assert!(size >= HoleList::min_size());
 
         let hole_addr = if hole.size == 0 {
-            // It's the dummy hole, which is the head of the HoleList. It's somewhere on the stack,
-            // so it's address is not the address of the hole. We set the addr to 0 as it's always
-            // the first hole.
+            // It's the dummy hole, which is the head of the HoleList. It's somewhere on the
+            // stack, so it's address is not the address of the hole. We set the
+            // addr to 0 as it's always the first hole.
             0
         } else {
             // tt's a real hole in memory and its address is the address of the hole
             hole as *mut _ as usize
         };
 
-        // Each freed block must be handled by the previous hole in memory. Thus the freed
-        // address must be always behind the current hole.
+        // Each freed block must be handled by the previous hole in memory. Thus the
+        // freed address must be always behind the current hole.
         assert!(
             hole_addr + hole.size <= addr,
             "invalid deallocation (probably a double free)"
@@ -306,8 +320,8 @@ fn deallocate(mut hole: &mut Hole, addr: usize, mut size: usize) {
 
 /// Identity function to ease moving of references.
 ///
-/// By default, references are reborrowed instead of moved (equivalent to `&mut *reference`). This
-/// function forces a move.
+/// By default, references are reborrowed instead of moved (equivalent to `&mut
+/// *reference`). This function forces a move.
 ///
 /// for more information, see section “id Forces References To Move” in:
 /// https://bluss.github.io/rust/fun/2015/10/11/stuff-the-identity-function-does/
